@@ -31,7 +31,34 @@ face_mesh = mp_face.FaceMesh(
 
 # overlay the mustache and hat on the frame
 def overlay_rgba(background, overlay, x, y, w, h ):
-    pass
+    overlay = cv2.resize(overlay, (w,h), interpolation = cv2.INTER_AREA)
+
+    b, g, r, a = cv2.split(overlay)
+
+    alpha = a.astype(float) / 255.0
+    alpha = cv2.merge([alpha, alpha, alpha])
+
+    # get background frame size
+    h_bg, w_bg = background.shape[:2]
+
+    # overlay don't fo outside the frame
+    x0, y0 = max(0,x), max(0,y) # top left cornver of the overlay
+    x1, y1 = min(x + w, w_bg), min( y + h, h_bg)   # Bottom right corner
+
+    # define the region of the overlay image  when the some part of overlay go outside the frame
+    overlay_slice = (slice(y0-y, y1 - y), slice(x0 - x, x1 - x))
+    background_roi = (slice(y0, y1), slice(x0, x1))
+
+    # Extract the region of interest
+    forground = cv2.merge([b,g,r])[overlay_slice]
+    alpha_roi = alpha[overlay_slice]
+    bg_roi = background[background_roi]
+
+    # blending of overlay with background
+    blended = cv2.convertScaleAbs(forground  * alpha_roi + bg_roi * (1 - alpha_roi) )
+    background[background_roi] = blended
+    return background
+
 
 
 # Using the webcam
@@ -52,7 +79,7 @@ while True:
     h_frame, w_frame = frame.shape[:2]  
 
     # Converting BGR to RGB , mediapipe library use RGB
-    rgb = cv2.cvtcolor(frame, cv2.COLOR_BGR2RGB)
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
     # get the landmark on captured frame
     result = face_mesh.process(rgb)
@@ -95,4 +122,15 @@ while True:
         hat_x = forehead_x - hat_w // 2
         hat_y = forehead_y - int(hat_h * 0.8)
         frame = overlay_rgba(frame, hat_png, hat_x, hat_y , hat_w, hat_h )
-        
+    
+    cv2.imshow("Press ESC to end the video : press s to capture image", frame)
+
+    key = cv2.waitKey(1) & 0xFF
+    if key == 27:
+        break
+    elif key == ord('s'):
+        cv2.imwrite("selfie.png", frame)
+        print("Image saved successfully")
+
+cap.release()
+cv2.destroyAllWindows()
